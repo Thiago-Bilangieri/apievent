@@ -1,7 +1,9 @@
 package com.bilanevent.api.service;
 
 import com.amazonaws.services.s3.AmazonS3;
+import com.bilanevent.api.domain.coupon.Coupon;
 import com.bilanevent.api.domain.event.Event;
+import com.bilanevent.api.domain.event.EventDetailsDTO;
 import com.bilanevent.api.domain.event.EventRequestDTO;
 import com.bilanevent.api.domain.event.EventResponseDTO;
 import com.bilanevent.api.repositories.EventRepository;
@@ -17,6 +19,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class EventService {
@@ -32,6 +35,9 @@ public class EventService {
 
     @Autowired
     private EventRepository repository;
+
+    @Autowired
+    private CouponService couponService;
 
     public Event createEvent(EventRequestDTO data) {
         String imgUrl = null;
@@ -110,7 +116,7 @@ public class EventService {
         }
 
         Pageable pageable = PageRequest.of(page, size);
-        Page<Event> eventPage = this.repository.findFilteredEvents( title, city, uf, startDate, endDate, pageable);
+        Page<Event> eventPage = this.repository.findFilteredEvents(title, city, uf, startDate, endDate, pageable);
         return eventPage.map(event -> new EventResponseDTO(
                 event.getId(),
                 event.getTitle(),
@@ -123,5 +129,26 @@ public class EventService {
                 event.getImageUrl())).stream().toList();
 
 
+    }
+
+    public EventDetailsDTO getEventDetails(UUID eventId) {
+        Event event = repository.findById(eventId).orElseThrow(() -> new IllegalArgumentException("Event not found"));
+        List<Coupon> coupons = couponService.consultCoupons(eventId, new Date());
+
+        List<EventDetailsDTO.CouponDTO> couponDTOS = coupons.stream()
+                .map(coupon -> new EventDetailsDTO.CouponDTO(
+                        coupon.getCode(),
+                        coupon.getDiscount(),
+                        coupon.getValid())).collect(Collectors.toList());
+
+        return new EventDetailsDTO(event.getId(),
+                event.getTitle(),
+                event.getDescription(),
+                event.getDate(),
+                event.getAddress().getCity(),
+                event.getAddress().getUf(),
+                event.getImageUrl(),
+                event.getEventUrl(),
+                couponDTOS);
     }
 }
